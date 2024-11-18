@@ -1,0 +1,729 @@
+---
+title: "Analysis Report"
+author: "Generated from R Script"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+---
+
+# Introduction
+This document contains the analysis performed using the provided R script. Each section corresponds to a part of the script.
+
+```{r}
+library(ggplot2)
+library(dplyr)
+library(directlabels)
+library(babynames)
+library(ggthemes)
+library(readxl)
+library(flextable)
+library(scales)
+library(officer)
+library(gridExtra)
+library(FactoMineR)
+library(factoextra)
+```
+
+## Importation de donn?es
+
+```{r}
+Etude_scoring <- read_excel("C:\Users\HP\Downloads\Stage\Donneé\Etude_scoring.xlsx")
+View(Etude_scoring)
+```
+
+## récodage
+
+```{r}
+Etude_scoring$reactivite <- ifelse(Etude_scoring$reactivite == 0, "Non", "Oui")
+```
+
+## Création d'une variable tranche d'age de taille 5
+
+```{r}
+Etude_scoring$tranche_age <- cut(Etude_scoring$age, breaks = seq(30, 55, 5), include.lowest = TRUE)
+Etude_scoring$nombre_incidence <- cut(Etude_scoring$nbincident, breaks = seq(0, 6, 2), include.lowest = TRUE)
+Etude_scoring$tranche_credit <- cut(Etude_scoring$credit, breaks = seq(0, 8, 2), include.lowest = TRUE)
+Etude_scoring$valeur_garantie <- cut(Etude_scoring$garantie, breaks = seq(0, 8, 2), include.lowest = TRUE)
+Etude_scoring$Cout_credit <- cut(Etude_scoring$cout, breaks = seq(0, 4, 2), include.lowest = TRUE)
+Etude_scoring$défaut_paiement <- ifelse(Etude_scoring$reactivite == "Oui", "Non", "Oui")
+```
+
+## Les couleur
+
+```{r}
+my_colors <- c("#D0D1E6", "#A6CEE3", "#56B4E9", "#0072B2")
+```
+
+## Taux d'inflation en pourcentage par annees
+
+```{r}
+ggplot(data = inflation_data, 
+       mapping = aes(x = years, 
+                     y = cpi_inflation
+       )
+) +
+  geom_line(linewidth = 2, color = "#3d85c6")+
+  theme(
+    panel.grid.major = element_blank() # Remove gridlines (major)
+    ,panel.grid.minor = element_blank() # Remove gridlines (minor)
+    ,panel.background = element_blank() # Remove grey background
+    ,plot.title = element_text(hjust = 0, size = 20, colour = "#3d85c6") # Title size and colour
+    ,plot.subtitle = element_text(hjust = 0, size = 12, colour = "#3d85c6") # Subtitle size and colour
+    ,plot.caption = element_text(vjust = 0.3, size = 12, colour = "#3d85c6") # Caption size and colour
+    ,axis.ticks.y = element_blank() # Remove tick marks (Y-Axis)
+    ,axis.text.y = element_text(hjust = 1, colour = "#3d85c6", size = 12) # Axis size and colour (Y-Axis)
+    ,axis.title.y = element_text(size = 12, colour = "#3d85c6") # Axis label size and colour (Y-Axis)
+    ,axis.ticks.x = element_blank() # Remove tick marks (X-Axis)
+    ,axis.text.x  = element_text(hjust = 1, colour = "#3d85c6", size = 12) # Axis size and colour (X-Axis)
+    ,axis.title.x = element_text(size = 12, colour = "#3d85c6") # Axis label size and colour (X-Axis)
+  ) +
+  labs(title = "Taux d'inflation en pourcentage",
+       x = "Année",
+       y = "Taux d'inflation (%)") +
+  theme_minimal()
+```
+
+## Repartition des employer selon le SEXE
+
+```{r}
+df <- Etude_scoring %>% 
+  group_by(sexe) %>% 
+  count() %>% 
+  ungroup() %>% 
+  mutate(perc = n / sum(n)) %>% 
+  arrange(perc) %>%
+  mutate(labels = scales::percent(perc))
+ggplot(df, aes(x = "", y = perc, fill = sexe)) +
+  geom_col() +
+  geom_label(aes(label = labels),
+             position = position_stack(vjust = 0.5),
+             show.legend = FALSE) +
+  coord_polar(theta = "y")+
+  xlab("Sexe") +
+  ylab("Pourcentage") +
+  scale_fill_manual(values = c("#D0D1E6", "#0072B2"))
+```
+
+## Repartition selon état civil de l'emprunteur
+
+```{r}
+Etude_scoring %>% 
+  count(matrim) %>% 
+  mutate(prop = n/sum(n)) %>% 
+  ggplot(aes(x = matrim, y = prop)) +
+  geom_col(fill = my_colors) +
+  geom_text(aes(label = scales::percent(prop), vjust = -1)) +
+  coord_cartesian(clip = "off") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle=45, hjust=1, vjust = 1),
+        axis.title = element_blank(),
+        plot.margin = margin(t = 20, r = 10, b = 10, l = 10)) +
+  scale_fill_manual(values = rev(my_colors))
+```
+
+## Repartition selon secteur d'activité de l'emprunteur
+
+```{r}
+df <- Etude_scoring %>% 
+  count(secteur) %>% 
+  mutate(prop = n/sum(n)) %>% 
+  arrange(desc(secteur))  # trier les niveaux d'éducation dans l'ordre décroissant
+ggplot(df, aes(x = reorder(secteur, prop), y = prop, fill = secteur)) +
+  geom_bar(stat = "identity", color = "white") +
+  geom_text(aes(label = scales::percent(prop), hjust = -0.2), color = "black", size = 4) +
+  scale_fill_brewer(palette = "Blues") +
+  labs(x = "secteur d'activité", y = "Proportion") +
+  theme_minimal() +
+  coord_flip()
+```
+
+## Repartition selon niveau d'éducation de l'emprunteur
+
+```{r}
+df <- Etude_scoring %>% 
+  count(education) %>% 
+  mutate(prop = n/sum(n)) %>% 
+  arrange(desc(education))  # trier les niveaux d'éducation dans l'ordre décroissant
+df$ymax <- cumsum(df$prop)
+df$ymin <- c(0, head(df$ymax, n=-1))
+df$labelPosition <- df$ymax - df$prop/2
+df$label <- paste0(round(df$prop*100), "%")
+ggplot(df, aes(ymax=ymax, ymin=ymin, xmax=4, xmin=3, fill=education)) +
+  geom_rect() +
+  geom_text(x=2.5, aes(y=labelPosition, label=label), size=6, color="black", hjust=1.5) +
+  scale_fill_brewer(palette = "Blues") +
+  scale_color_brewer(palette = "Blues") +
+  coord_polar(theta="y") +
+  xlim(c(-1, 4)) +
+  theme_void() +
+  theme(legend.position = "none") +
+  theme(plot.margin = unit(c(1,2,1,1), "cm"))
+```
+
+## Repartition selon la catégorie socioprofessionnelle de l'emprunteur
+
+```{r}
+df <- Etude_scoring %>%
+  count(csp) %>%
+  mutate(prop = n/sum(n)) %>%
+  arrange(desc(csp))  # trier les CSP dans l'ordre décroissant
+df$csp <- fct_reorder(df$csp, df$prop)
+ggplot(df, aes(x=csp, y=prop)) +
+  geom_text(aes(label = scales::percent(prop)), color = "black", vjust = -.8) +
+  geom_bar(stat="identity", fill="#0072B2", alpha=.6, width=.5) +
+  xlab("") +
+  ylab("Proportion") +
+  theme_bw() +
+  theme(
+    axis.text.x = element_text(angle=45, hjust=1),
+    panel.grid.major.x = element_blank(),
+    panel.grid.minor.x = element_blank(),
+    panel.grid.major.y = element_line(),
+    panel.grid.minor.y = element_blank(),
+    axis.line = element_line(),
+    legend.position = "none"
+  )
+```
+
+## Créer un tableau de base pour la variable "age"
+
+```{r}
+age_table <- Etude_scoring %>%
+  select(age) %>%
+  summarize(
+    Minimum = min(age),
+    Median = median(age),
+    Moyenne = mean(age),
+    Maximum = max(age)
+  )
+```
+
+## Convertir le tableau en flextable
+
+```{r}
+age_flextable <- regulartable(age_table) %>%
+  border_outer(border = fp_border(color = "#D0D1E6", width = .5)) %>%
+  border_inner(border = fp_border(color = "#D0D1E6", width = .5)) %>%
+  align(align = "center", part = "all") %>%
+  bg(bg = "#56B4E9", part = "header")
+age_flextable
+```
+
+## Histogramme d'age
+
+```{r}
+df <- Etude_scoring %>% 
+  count(age) %>% 
+  mutate(prop = n/sum(n)) 
+```
+
+## Créer un histogramme de la variable "age"
+
+```{r}
+ggplot(df, aes(x = reorder(age, prop), y = prop, fill = age)) +
+  geom_histogram(stat = "identity", fill="#0072B2", alpha=.6, color="white") + scale_fill_discrete(h = c(240, 10), c = 120, l = 70) +
+  theme_minimal() +
+  labs(x = "Variable X", y = "Proportion") +
+  xlab("Age") +
+  ylab("Proportion") +
+  ggtitle("Histogramme de l'âge") +
+  scale_y_continuous(labels = scales::percent)
+```
+
+## Créer un tableau de base pour la variable "age"
+
+```{r}
+age_table <- Etude_scoring %>%
+  select(credit) %>%
+  summarize(
+    Minimum = min(credit),
+    Median = median(credit),
+    Moyenne = mean(credit),
+    Maximum = max(credit)
+  )
+```
+
+## Convertir le tableau en flextable
+
+```{r}
+age_flextable <- regulartable(age_table) %>%
+  border_outer(border = fp_border(color = "#D0D1E6", width = 1)) %>%
+  border_inner(border = fp_border(color = "#D0D1E6", width = 1)) %>%
+  align(align = "center", part = "all") %>%
+  bg(bg = "#56B4E9", part = "header")
+age_flextable
+```
+
+## Créer un histogramme de la variable "credit" avec barres dans chaque intervalle de taille 2 entre 0 et 6
+
+```{r}
+ggplot(Etude_scoring, aes(x = cout, fill = cout)) +
+  geom_histogram(binwidth = 2, boundary = 0, color = "white", fill="#0072B2") +
+  scale_fill_discrete(h = c(240, 10), c = 120, l = 70) +
+  theme_minimal() +
+  labs(x = "Cout", y = "Effectif")
+```
+
+## Histogramme de garantie
+
+```{r}
+plot1 <- ggplot(Etude_scoring, aes(x = garantie, fill = garantie)) +
+  geom_histogram(binwidth = 2, boundary = 0, color = "white", fill="#0072B2") +
+  scale_fill_discrete(h = c(240, 10), c = 120, l = 70) +
+  theme_minimal() +
+  labs(x = "Valeur de la garantie", y = "Effectif")
+```
+
+## Graphique pour la variable nat_garnt
+
+```{r}
+df <- Etude_scoring %>% 
+  count(nat_garnt) %>% 
+  mutate(prop = n/sum(n)) %>% 
+  arrange(desc(nat_garnt))  # trier les niveaux d'éducation dans l'ordre décroissant
+plot2 <- ggplot(df, aes(x = reorder(nat_garnt, prop), y = prop, fill = nat_garnt)) +
+  geom_bar(stat = "identity", color = "white") +
+  geom_text(aes(label = scales::percent(prop), hjust = -0.2), color = "black", size = 4) +
+  scale_fill_brewer(palette = "Blues") +
+  labs(x = "type de garantie", y = "Proportion") +
+  theme_minimal() +
+  coord_flip()
+```
+
+## Combinaison des deux graphiques
+
+```{r}
+grid.arrange(plot1, plot2, ncol=2, widths=c(2, 3.8))
+```
+
+## Créer un tableau de base pour la variable "age"
+
+```{r}
+age_table <- Etude_scoring %>%
+  select(garantie) %>%
+  summarize(
+    Minimum = min(garantie),
+    Median = median(garantie),
+    Moyenne = mean(garantie),
+    Maximum = max(garantie)
+  )
+```
+
+## Convertir le tableau en flextable
+
+```{r}
+age_flextable <- regulartable(age_table) %>%
+  border_outer(border = fp_border(color = "#D0D1E6", width = 1)) %>%
+  border_inner(border = fp_border(color = "#D0D1E6", width = 1)) %>%
+  align(align = "center", part = "all") %>%
+  bg(bg = "#56B4E9", part = "header")
+age_flextable
+library(gridExtra)
+```
+
+## Histogramme de garantie
+
+```{r}
+plot1 <- ggplot(Etude_scoring, aes(x = recouvre, fill = recouvre)) +
+  geom_histogram(binwidth = 2, boundary = 0, color = "white", fill="#0072B2") +
+  scale_fill_discrete(h = c(240, 10), c = 120, l = 70) +
+  theme_minimal() +
+  labs(x = "Montant Récouvre", y = "Effectif")
+```
+
+## Graphique pour la variable nat_garnt
+
+```{r}
+df <- Etude_scoring %>% 
+  count(reactivite) %>% 
+  mutate(prop = n/sum(n)) %>% 
+  arrange(desc(reactivite))  # trier les niveaux d'éducation dans l'ordre décroissant
+plot2 <- ggplot(df, aes(x = reorder(reactivite, prop), y = prop, fill = reactivite)) +
+  geom_bar(stat = "identity", color = "white") +
+  geom_text(aes(label = scales::percent(prop), hjust = -0.2), color = "black", size = 4) +
+  scale_fill_brewer(palette = "Blues") +
+  labs(x = "Reactivité", y = "Proportion") +
+  theme_minimal() +
+  coord_flip()
+```
+
+## Combinaison des deux graphiques
+
+```{r}
+grid.arrange(plot2, plot1, ncol=2, widths=c(3.2, 2))
+```
+
+## Nuage de points entre le crédit et la garantie
+
+```{r}
+ggplot(Etude_scoring, aes(x = garantie, y = credit)) + 
+  geom_point(aes(color = credit), size = 3) + 
+  scale_color_gradient(low = "#56B4E9", high = "#0072B2") +
+  theme_minimal() +
+  labs(x = "Garantie", y = "Crédit")
+```
+
+## Diagramme en boîte de la variable "cout"
+
+```{r}
+ggplot(Etude_scoring, aes(y=cout, x=csp, fill=csp)) +
+  geom_boxplot(alpha=0.7) +
+  labs(x="Catégorie socioprofessionnelle", y="Cout") +
+  theme_minimal() +
+  scale_fill_brewer(palette = "Blues")
+```
+
+## 
+
+## Créer les données
+
+```{r}
+df_bar <- Etude_scoring %>% 
+  group_by(défaut_paiement, Cout_credit) %>%
+  summarize(count = n()) %>%
+  ungroup()
+```
+
+## Calculer les totaux par groupe
+
+```{r}
+df_bar <- df_bar %>% 
+  group_by(défaut_paiement) %>%
+  mutate(total = sum(count))
+```
+
+## Calculer les proportions en fonction du total par groupe
+
+```{r}
+df_bar <- df_bar %>% 
+  mutate(prop = count/total)
+```
+
+## Créer le graphique
+
+```{r}
+ggplot(df_bar, aes(x = défaut_paiement, y = prop, fill = Cout_credit)) +
+  geom_bar(stat = "identity") +
+  scale_fill_brewer(palette = "Blues", name = "Cout_credit") +
+  labs(x = "Défaut de paiement", y = "Proportion") +
+  geom_text(aes(label = paste0(round(prop*100, 2), "%")), 
+            position = position_stack(vjust = 0.5), size = 3, fontface = "bold") +
+  theme_minimal()
+library(pivottabler)
+pt <- PivotTable$new()
+pt$addData(Etude_scoring)
+pt$addColumnDataGroups("sexe")
+pt$addRowDataGroups("nbincident")
+pt$defineCalculation(calculationName="Pourcentage", summariseExpression="n()")
+pt$renderPivot()
+```
+
+## 
+
+```{r}
+if(!require(devtools)) install.packages("devtools")
+devtools::install_github("cardiomoon/moonBook")
+devtools::install_github("cardiomoon/webr")
+require(ggplot2)
+require(moonBook)
+require(webr)
+PieDonut(Etude_scoring,aes(défaut_paiement, secteur),ratioByGroup=TRUE)
+```
+
+## Charger les packages nécessaires
+
+```{r}
+library(ggplot2)
+library(DescTools)  # Pour la fonction CramerV
+```
+
+## Sélectionner les variables
+
+```{r}
+selected_vars <- Etude_scoring[, c("défaut_paiement", "secteur", "sexe", "csp", "education", "matrim", "nat_garnt", "tranche_age", "nombre_incidence", "tranche_credit", "valeur_garantie", "Cout_credit")]
+```
+
+## S'assurer que toutes les variables sont des facteurs
+
+```{r}
+selected_vars <- as.data.frame(sapply(selected_vars, as.factor))
+```
+
+## Calculer la matrice des coefficients de contingence de Cramér pour chaque paire de variables
+
+```{r}
+n <- ncol(selected_vars)
+cramers_matrix <- matrix(NA, nrow = n, ncol = n)
+colnames(cramers_matrix) <- colnames(selected_vars)
+for (i in 1:n) {
+  for (j in 1:n) {
+    if (i == j) {
+      cramers_matrix[i, j] <- 1
+    } else {
+      cramers_matrix[i, j] <- DescTools::CramerV(selected_vars[[i]], selected_vars[[j]])
+    }
+  }
+}
+```
+
+## Convertir la matrice en data frame
+
+```{r}
+cramers_df <- as.data.frame(cramers_matrix)
+cramers_df$Variable1 <- colnames(cramers_matrix)
+cramers_df <- reshape2::melt(cramers_df, id.vars = "Variable1", variable.name = "Variable2", value.name = "CramerV")
+```
+
+## Répéter les noms de variables sur les deux axes
+
+```{r}
+variable_repeated <- expand.grid(Variable1 = unique(cramers_df$Variable1), Variable2 = unique(cramers_df$Variable1))
+cramers_df_all <- merge(cramers_df, variable_repeated, all = TRUE)
+```
+
+## Créer le graphique de la matrice de dépense avec les noms de variables répétés
+
+```{r}
+ggplot(cramers_df_all, aes(Variable1, Variable2, fill = CramerV)) +
+  geom_tile() +
+  geom_text(aes(label = round(CramerV, 2)), size = 3, color = "black") +
+  scale_fill_gradient2(low = "white", mid = "lightblue", high = "#0072B2", midpoint = median(cramers_df$CramerV)) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1),
+        axis.title.x = element_blank(),
+        axis.title.y = element_blank()) +
+  labs(fill = "Coefficient de Cramér", title = "Matrice de Dépense par Coefficient de Cramér")
+```
+
+## ACM
+
+```{r}
+vars <- Etude_scoring[, c("défaut_paiement", "secteur", "sexe", "csp", "education", "matrim", "nat_garnt","tranche_age", "nombre_incidence", "tranche_credit", "valeur_garantie")]
+```
+
+## Vérifiez s'il y a des données manquantes
+
+```{r}
+missing_values <- sum(is.na(vars))
+print(paste("Il y a", missing_values, "valeurs manquantes dans le jeu de données"))
+```
+
+## Supprimer les lignes avec des données manquantes (si nécessaire)
+
+```{r}
+vars_clean <- na.omit(vars)
+```
+
+## Convertir les variables en facteurs
+
+```{r}
+vars_clean$secteur <- as.factor(vars_clean$secteur)
+vars_clean$sexe <- as.factor(vars_clean$sexe)
+vars_clean$csp <- as.factor(vars_clean$csp)
+vars_clean$education <- as.factor(vars_clean$education)
+vars_clean$matrim <- as.factor(vars_clean$matrim)
+vars_clean$nat_garnt <- as.factor(vars_clean$nat_garnt)
+vars_clean$tranche_age <- as.factor(vars_clean$tranche_age)
+vars_clean$nombre_incidence <- as.factor(vars_clean$nombre_incidence)
+vars_clean$tranche_credit <- as.factor(vars_clean$tranche_credit)
+vars_clean$valeur_garantie <- as.factor(vars_clean$valeur_garantie)
+vars_clean$défaut_paiement <- as.factor(vars_clean$défaut_paiement)
+```
+
+## Réalisation de l'ACM
+
+```{r}
+res.mca <- MCA(vars_clean, graph = FALSE)
+```
+
+## Création du dual plot des variables et des individus avec un dégradé de couleur bleu pour les individus
+
+```{r}
+fviz_mca_biplot(res.mca, 
+                col.ind = res.mca$ind$coord[, 1], # Utiliser les coordonnées du premier axe pour déterminer la couleur
+                col.var = "#0072B2", # Couleur des variables
+                repel = TRUE, # Éviter le chevauchement des labels
+                gradient.cols = c("lightblue", "#D0D1E6"), # Palette de couleurs dégradée bleu
+                title = "")
+fviz_eig(res.mca, 
+         addlabels = TRUE, # Ajouter des étiquettes pour les pourcentages
+         title = "Contribution des axes factoriels - Analyse de Correspondance Multiples")
+eig.val <- get_eigenvalue(res.mca)
+```
+
+## Model
+
+```{r}
+Etude_scoring$defaut_paie <- ifelse(Etude_scoring$défaut_paiement == "Oui", 1, 0)
+```
+
+## Réalisation de la régression logistique
+
+```{r}
+model <- glm(defaut_paie ~ secteur + csp + education + matrim + tranche_age + nombre_incidence + tranche_credit + valeur_garantie, 
+             data = Etude_scoring, family = binomial)
+```
+
+## Affichage du résumé du modèle
+
+```{r}
+summary(model)
+```
+
+## Charger les packages
+
+```{r}
+library(pROC)
+library(ggplot2)
+```
+
+## Création des prédictions du modèle
+
+```{r}
+predictions <- predict(model, type="response")
+```
+
+## Calcul de la courbe ROC
+
+```{r}
+roc_obj <- roc(Etude_scoring$défaut_paiement, predictions)
+```
+
+## Calcul de l'AUC
+
+```{r}
+auc_val <- auc(roc_obj)
+```
+
+## Conversion de la courbe ROC en dataframe pour ggplot
+
+```{r}
+roc_df <- data.frame(
+  FPR = 1 - roc_obj$specificities,  # taux de faux positifs
+  TPR = roc_obj$sensitivities  # taux de vrais positifs
+)
+```
+
+## Création de la courbe ROC avec ggplot
+
+```{r}
+ggplot(roc_df, aes(x = FPR, y = TPR)) +
+  geom_line(color = "#56B4E9") +  # Rendre la courbe bleue
+  labs(x = "Taux de Faux Positifs", 
+       y = "Taux de Vrais Positifs", 
+       title = "Courbe ROC") +
+  theme_minimal() +
+  geom_abline(intercept = 0, slope = 1, linetype = "dashed", color = "#0072B2") +
+  coord_equal() +
+  annotate("text", x = .75, y = .25, 
+           label = paste("RCO =", round(auc_val, 2)), 
+           color = "blue")
+```
+
+## Obtenir un résumé tidy du modèle avec les Odds Ratios et les Intervalles de Confiance
+
+```{r}
+tidy_model <- tidy(model, conf.int = TRUE)
+tidy_model$OR <- exp(tidy_model$estimate)
+tidy_model$CI_low <- exp(tidy_model$conf.low)
+tidy_model$CI_high <- exp(tidy_model$conf.high)
+```
+
+## Convertir le dataframe tidy en un flextable
+
+```{r}
+flextable_obj <- flextable(tidy_model)
+```
+
+## Afficher le flextable
+
+```{r}
+print(flextable_obj)
+```
+
+## Obtenir les coefficients estimés du modèle
+
+```{r}
+coefficients <- coef(model)[-1] # Exclure l'intercept
+```
+
+## Créer un data frame avec les noms des variables et leurs coefficients
+
+```{r}
+df <- data.frame(variable = names(coefficients), coefficient = coefficients)
+```
+
+## Trier le data frame par la valeur absolue des coefficients (importance relative)
+
+```{r}
+df <- df[order(abs(df$coefficient), decreasing = TRUE), ]
+```
+
+## Créer le diagramme en barres
+
+```{r}
+ggplot(df, aes(x = variable, y = coefficient, fill = coefficient > 0)) +
+  geom_bar(stat = "identity", color = "black") +
+  coord_flip() +
+  labs(x = "Variable indépendante", y = "Coefficient estimé", 
+       title = "Importance relative des variables indépendantes") +
+  scale_fill_manual(values = c("#A6CEE3", "#0072B2"), guide = FALSE) +
+  theme_minimal()
+```
+
+## Charger les packages nécessaires
+
+```{r}
+library(pROC) # Pour les courbes ROC
+library(DescTools) # Pour le calcul du R² de Nagelkerke
+```
+
+## Calcul des prédictions du modèle
+
+```{r}
+predictions <- predict(model, type = "response")
+```
+
+## Matrice de confusion
+
+```{r}
+confusion_matrix <- table(Etude_scoring$défaut_paiement, ifelse(predictions > 0.5, 1, 0))
+print(confusion_matrix)
+```
+
+## Taux de succès global (Accuracy)
+
+```{r}
+accuracy <- sum(diag(confusion_matrix)) / sum(confusion_matrix)
+print(paste("Taux de succès global (Accuracy) :", accuracy))
+```
+
+## Sensibilité (True Positive Rate, Sensitivity)
+
+```{r}
+sensitivity <- confusion_matrix[2, 2] / sum(confusion_matrix[2, ])
+print(paste("Sensibilité (True Positive Rate, Sensitivity) :", sensitivity))
+```
+
+## Spécificité (True Negative Rate, Specificity)
+
+```{r}
+specificity <- confusion_matrix[1, 1] / sum(confusion_matrix[1, ])
+print(paste("Spécificité (True Negative Rate, Specificity) :", specificity))
+```
+
+## Courbe ROC et aire sous la courbe ROC (AUC-ROC)
+
+```{r}
+roc <- roc(Etude_scoring$défaut_paiement, predictions)
+auc_roc <- auc(roc)
+print(paste("Aire sous la courbe ROC (AUC-ROC) :", auc_roc))
+```
+
+## R² de Nagelkerke
+
+```{r}
+nagelkerke_r2 <- NagelkerkeR2(model)
+print(paste("R² de Nagelkerke :", nagelkerke_r2))
+```
