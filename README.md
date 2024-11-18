@@ -23,11 +23,6 @@ This project analyzes the impact of credit guarantees on payment defaults in Mau
 - **Scikit-learn**: Machine learning models.
 - **Matplotlib, Seaborn**: Data visualizations in Python.
 
-### Database
-- **SQL**: For managing credit data securely.
-
----
-
 ## 🖥️ Installation and Usage
 
 1. Clone this repository:
